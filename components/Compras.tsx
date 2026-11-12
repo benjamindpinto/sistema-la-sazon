@@ -258,7 +258,7 @@ export default function Compras({
       <ConfirmModal
         open={!!anulando}
         title={`¿Anular la compra #${anulando?.numero}?`}
-        description={anulando?.estado === 'recibida' ? 'Se descuenta del stock lo que había sumado esta compra y se borran los precios que registró.' : 'La compra queda anulada y deja de figurar como pendiente.'}
+        description={anulando?.estado === 'recibida' ? 'Se descuenta del stock lo que había sumado esta compra y los precios que registró dejan de contar en las comparaciones.' : 'La compra queda anulada y deja de figurar como pendiente.'}
         confirmLabel="Anular"
         danger
         onCancel={() => setAnulando(null)}

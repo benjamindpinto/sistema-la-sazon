@@ -205,7 +205,7 @@ create index movimientos_insumo_idx on movimientos_stock (insumo_id, creado_en d
 create index movimientos_pedido_idx on movimientos_stock (pedido_id);
 create index movimientos_creado_idx on movimientos_stock (creado_en desc);
 
-create function trg_movimiento_stock() returns trigger language plpgsql as $$
+create function trg_movimiento_stock() returns trigger language plpgsql set search_path = public as $$
 begin
   if tg_op = 'INSERT' then
     update insumos set stock_actual = stock_actual + new.cantidad where id = new.insumo_id;
@@ -261,7 +261,7 @@ alter table pedidos
 -- ---------------------------------------------------------------------------
 -- Costo de receta por producto y tamaño (con el último costo de cada insumo)
 -- ---------------------------------------------------------------------------
-create view v_costo_receta as
+create view v_costo_receta with (security_invoker = true) as
 select
   p.id as producto_id,
   coalesce(sum(ri.cant_simple * i.costo_unitario), 0)::numeric(12,2) as costo_simple,
@@ -277,7 +277,7 @@ group by p.id;
 -- Progreso de fidelización de cada cliente hoy: compras que cuentan desde su
 -- último premio (y dentro de la ventana de días si está configurada).
 -- ---------------------------------------------------------------------------
-create view v_progreso_fidelidad as
+create view v_progreso_fidelidad with (security_invoker = true) as
 with cfg as (
   select * from fidelidad_config where id = 1
 ),
@@ -310,7 +310,7 @@ left join ultimo u on u.cliente_id = cl.id;
 -- receta (o en cero si está cancelado). Es idempotente: se puede llamar después
 -- de crear, cancelar o reactivar una venta y sólo registra la diferencia.
 -- ---------------------------------------------------------------------------
-create function sincronizar_stock_pedido(p_pedido_id uuid) returns void language plpgsql as $$
+create function sincronizar_stock_pedido(p_pedido_id uuid) returns void language plpgsql set search_path = public as $$
 declare
   v_estado text;
   v_fecha  timestamptz;
@@ -360,7 +360,7 @@ end $$;
 -- premio y dentro de la ventana de días, si hay), le genera el cupón.
 -- Devuelve el id del cupón generado o null.
 -- ---------------------------------------------------------------------------
-create function evaluar_fidelidad(p_pedido_id uuid) returns uuid language plpgsql as $$
+create function evaluar_fidelidad(p_pedido_id uuid) returns uuid language plpgsql set search_path = public as $$
 declare
   cfg       fidelidad_config%rowtype;
   v_cliente uuid;
@@ -424,7 +424,7 @@ end $$;
 -- Procesa una venta recién cargada o modificada: guarda el costo de receta de
 -- cada ítem, descuenta stock y evalúa el premio de fidelidad.
 -- ---------------------------------------------------------------------------
-create function procesar_pedido(p_pedido_id uuid) returns uuid language plpgsql as $$
+create function procesar_pedido(p_pedido_id uuid) returns uuid language plpgsql set search_path = public as $$
 begin
   update pedido_items pi
      set costo_unitario = case pi.tamano when 'simple' then v.costo_simple
@@ -446,7 +446,7 @@ end $$;
 -- Antes de llamarla se puede completar compra_items.cantidad_recibida; si queda
 -- vacía se asume que llegó todo lo pedido.
 -- ---------------------------------------------------------------------------
-create function recibir_compra(p_compra_id uuid, p_fecha timestamptz default now()) returns void language plpgsql as $$
+create function recibir_compra(p_compra_id uuid, p_fecha timestamptz default now()) returns void language plpgsql set search_path = public as $$
 declare
   v_proveedor uuid;
   r record;
@@ -490,8 +490,10 @@ end $$;
 
 -- ---------------------------------------------------------------------------
 -- Anula una compra. Si ya se había recibido, descuenta el stock que había sumado.
+-- Los precios que registró quedan guardados pero dejan de contar (las consultas
+-- de precios vigentes ignoran los de compras anuladas).
 -- ---------------------------------------------------------------------------
-create function anular_compra(p_compra_id uuid) returns void language plpgsql as $$
+create function anular_compra(p_compra_id uuid) returns void language plpgsql set search_path = public as $$
 declare
   v_estado text;
   r record;
@@ -510,7 +512,6 @@ begin
         values (r.insumo_id, 'ajuste', -r.cantidad, p_compra_id, 'Compra anulada');
       end if;
     end loop;
-    delete from precios_proveedor where compra_id = p_compra_id;
   end if;
 
   update compras set estado = 'cancelada' where id = p_compra_id;
@@ -522,17 +523,20 @@ insert into fidelidad_config (id, activo, compras_necesarias, ventana_dias, mont
 values (1, true, 5, null, 0, 'producto', null, 'simple', 30,
         '¡Hola {nombre}! Gracias por elegirnos {compras} veces 🍔 Te ganaste {premio}. Mostrá el código {codigo} en tu próximo pedido{vence}.');
 
--- El panel se conecta con el usuario dueño de la base; nadie más debe leer estas tablas.
--- En Supabase esto cierra el acceso por la API pública (anon/authenticated).
-do $$
-declare t text;
-begin
-  if exists (select 1 from pg_roles where rolname = 'anon') then
-    foreach t in array array['usuarios','clientes','productos','insumos','receta_items','proveedores','compras',
-                             'compra_items','precios_proveedor','pedidos','pedido_items','movimientos_stock',
-                             'fidelidad_config','cupones'] loop
-      execute format('alter table %I enable row level security', t);
-    end loop;
-    revoke all on all tables in schema public from anon, authenticated;
-  end if;
-end $$;
+-- RLS en todas las tablas: sin políticas, nadie lee nada salvo el dueño de las tablas
+-- (la base local) y el rol del panel en Supabase (ver supabase_rol_app.sql).
+-- En Supabase esto deja afuera a la API pública (anon/authenticated).
+alter table usuarios          enable row level security;
+alter table clientes          enable row level security;
+alter table productos         enable row level security;
+alter table insumos           enable row level security;
+alter table receta_items      enable row level security;
+alter table proveedores       enable row level security;
+alter table compras           enable row level security;
+alter table compra_items      enable row level security;
+alter table precios_proveedor enable row level security;
+alter table pedidos           enable row level security;
+alter table pedido_items      enable row level security;
+alter table movimientos_stock enable row level security;
+alter table fidelidad_config  enable row level security;
+alter table cupones           enable row level security;

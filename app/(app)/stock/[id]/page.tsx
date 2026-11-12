@@ -8,6 +8,7 @@ import BarChart from '@/components/BarChart'
 import AccionesInsumo from '@/components/AccionesInsumo'
 import type { InsumoFila } from '@/components/TablaStock'
 import { estadoStock } from '@/lib/stock'
+import { SQL_PRECIO_VALIDO } from '@/lib/proveedores'
 
 export const dynamic = 'force-dynamic'
 
@@ -38,9 +39,10 @@ export default async function InsumoPage({ params }: { params: Promise<{ id: str
               (select pp2.precio from precios_proveedor pp2
                 where pp2.proveedor_id = pp.proveedor_id and pp2.insumo_id = pp.insumo_id and pp2.precio <> pp.precio
                   and (pp2.fecha, pp2.creado_en) < (pp.fecha, pp.creado_en)
+                  and not exists (select 1 from compras ca where ca.id = pp2.compra_id and ca.estado = 'cancelada')
                 order by pp2.fecha desc, pp2.creado_en desc limit 1) as anterior
          from precios_proveedor pp join proveedores pr on pr.id = pp.proveedor_id
-        where pp.insumo_id = $1 and pr.activo
+        where pp.insumo_id = $1 and pr.activo and ${SQL_PRECIO_VALIDO}
         order by pp.proveedor_id, pp.fecha desc, pp.creado_en desc`,
       [id]
     ),

@@ -31,12 +31,16 @@ export interface ProveedorScore {
   sobreprecio_pct: number | null
 }
 
+// Los precios que salieron de una compra que después se anuló no cuentan
+export const SQL_PRECIO_VALIDO = `not exists (select 1 from compras ca where ca.id = pp.compra_id and ca.estado = 'cancelada')`
+
 // Precio vigente de cada proveedor para cada insumo (el último cargado)
 export const SQL_PRECIOS_VIGENTES = `
   select distinct on (pp.proveedor_id, pp.insumo_id)
          pp.proveedor_id, pp.insumo_id, pp.precio, pp.fecha, pp.origen
     from precios_proveedor pp
     join proveedores pr on pr.id = pp.proveedor_id and pr.activo
+   where ${SQL_PRECIO_VALIDO}
    order by pp.proveedor_id, pp.insumo_id, pp.fecha desc, pp.creado_en desc`
 
 export async function getProveedoresScore(id?: string): Promise<ProveedorScore[]> {

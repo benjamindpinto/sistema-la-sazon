@@ -4,6 +4,7 @@ import { cantidad, fechaHora, pesos } from '@/lib/formato'
 import { TIPO_MOVIMIENTO, labelTamano, tamanosDe } from '@/lib/catalogo'
 import TablaStock, { type InsumoFila } from '@/components/TablaStock'
 import KpiCard from '@/components/KpiCard'
+import { SQL_PRECIO_VALIDO } from '@/lib/proveedores'
 
 export const dynamic = 'force-dynamic'
 
@@ -45,7 +46,7 @@ async function getInsumos(): Promise<InsumoFila[]> {
         select pr.nombre as proveedor, x.precio
           from (select distinct on (pp.proveedor_id) pp.proveedor_id, pp.precio
                   from precios_proveedor pp
-                 where pp.insumo_id = i.id
+                 where pp.insumo_id = i.id and ${SQL_PRECIO_VALIDO}
                  order by pp.proveedor_id, pp.fecha desc, pp.creado_en desc) x
           join proveedores pr on pr.id = x.proveedor_id and pr.activo
          order by x.precio

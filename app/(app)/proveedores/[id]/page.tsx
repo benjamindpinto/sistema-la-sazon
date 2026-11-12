@@ -2,7 +2,7 @@ import Link from 'next/link'
 import { notFound } from 'next/navigation'
 import { q } from '@/lib/db'
 import { duracionHoras, fechaHora, linkWhatsApp, num, pesos } from '@/lib/formato'
-import { getProveedoresScore, SQL_PRECIOS_VIGENTES } from '@/lib/proveedores'
+import { getProveedoresScore, SQL_PRECIO_VALIDO, SQL_PRECIOS_VIGENTES } from '@/lib/proveedores'
 import { chipVelocidad } from '@/lib/score'
 import KpiCard from '@/components/KpiCard'
 import { BotonEditarProveedor, ListaPrecios, type PrecioLista } from '@/components/Proveedores'
@@ -26,6 +26,7 @@ export default async function ProveedorPage({ params }: { params: Promise<{ id: 
               m.precio as minimo, m.proveedor as proveedor_minimo,
               (select pp.precio from precios_proveedor pp
                 where pp.proveedor_id = $1 and pp.insumo_id = v.insumo_id and pp.precio <> v.precio and pp.fecha <= v.fecha
+                  and ${SQL_PRECIO_VALIDO}
                 order by pp.fecha desc, pp.creado_en desc limit 1) as anterior
          from vig v
          join insumos i on i.id = v.insumo_id

@@ -58,17 +58,21 @@ SESSION_SECRET=<cualquier texto largo>
 - `db/seed_demo.sql`: **sólo para mostrar el sistema**. Tiene insumos, recetas y costos estimados, 6 proveedores y 25 clientes
   ficticios, y 30 días de ventas y compras simuladas. No se carga en producción.
 
-## Publicarlo (Supabase + Vercel)
+## Producción
 
-1. Crear un proyecto de Supabase y copiar la cadena de conexión del **Transaction pooler** (puerto 6543).
-2. Aplicar la estructura y el menú:
-   ```bash
-   # con DATABASE_URL de Supabase en .env.local
-   npm run db:aplicar -- db/schema.sql db/seed_menu.sql
-   npm run usuario:crear -- dueño@lasazon.com "contraseña-segura" "Nombre"
-   ```
-3. En Vercel, importar el repo y cargar las variables `DATABASE_URL`, `DB_POOL_MAX=3` y `SESSION_SECRET`.
-4. Cargar en el panel los insumos reales, sus recetas y los proveedores.
+- **Supabase:** proyecto `LA-SAZON` (`dtkvugbmhhdlqzmdczeg`, São Paulo), organización BENAUTOMATION.
+  Tiene cargados `schema.sql`, `seed_menu.sql` y `supabase_rol_app.sql`, aplicados como migraciones. No tiene datos de ejemplo.
+- **Conexión:** el panel entra con un rol propio, `app_lasazon`, por el Transaction pooler
+  (`aws-1-sa-east-1.pooler.supabase.com:6543`, usuario `app_lasazon.dtkvugbmhhdlqzmdczeg`).
+  Ese rol sólo tiene permisos sobre estas tablas. RLS está activo y la API pública de Supabase no ve nada.
+- **Vercel:** se importa este repo y se cargan `DATABASE_URL`, `DB_POOL_MAX=3` y `SESSION_SECRET`.
+  Los valores están en `.env.vercel`, que no se sube a git.
+- **Usuarios del panel:**
+  `node --env-file=.env.vercel scripts/crear-usuario.mjs email@dominio.com "contraseña" "Nombre"`
+  Si el email ya existe, cambia la contraseña.
+
+Para una base nueva: aplicar `db/schema.sql`, `db/seed_menu.sql` y `db/supabase_rol_app.sql`, y darle contraseña al rol con
+`alter role app_lasazon with password '...'`.
 
 ## Pendiente con el cliente
 
